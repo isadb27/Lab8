@@ -3,9 +3,14 @@
 ## 📝 Description
 This dynamic web application allows users to upload, store, and view memes in an interactive gallery. The project uses modern technologies to provide a smooth and attractive experience.
 
+## 🌐 Live Demos
+- Netlify: [https://laboratorio8.netlify.app/](https://laboratorio8.netlify.app/)
+- Firebase: [https://meme-gallery-fd7e3.web.app/](https://meme-gallery-fd7e3.web.app/)
+
 ## 🚀 Main Features
-- Image (meme) upload functionality
+- Image and video upload functionality
 - Interactive visual gallery
+- Chronological and random sorting options
 - Cloud storage with Supabase Storage
 - Dual deployment on Firebase Hosting and Netlify
 - Development with TypeScript and Web Components
@@ -82,8 +87,8 @@ Contributions are welcome. Please follow these steps:
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
 ## 👥 Authors
-- [Your Name]
+- Isabella D' Otero Bernal
 
 ## 🙏 Acknowledgments
 - Supabase for storage services
-- Firebase and Netlify for hosting services 
+- Firebase and Netlify for hosting services
