@@ -1,21 +1,22 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../config/supabase';
 
 @customElement('meme-uploader')
 export class MemeUploader extends LitElement {
   static styles = css`
     :host {
       display: block;
+    }
+
+    .upload-container {
       background: white;
       padding: 2rem;
       border-radius: 12px;
       width: 90%;
       max-width: 500px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    .upload-container {
+      margin: 0 auto;
       text-align: center;
     }
 
@@ -46,23 +47,46 @@ export class MemeUploader extends LitElement {
     }
 
     .preview-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 1rem;
       margin-top: 1rem;
-      position: relative;
-      display: inline-block;
     }
 
-    .preview-image {
-      max-width: 100%;
-      max-height: 300px;
+    .preview-item {
+      position: relative;
+      aspect-ratio: 1;
+      overflow: hidden;
       border-radius: 8px;
-      display: block;
-      margin: 0 auto;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .preview-image, .preview-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .preview-video {
+      background: #000;
+    }
+
+    .file-type-indicator {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 2;
     }
 
     .remove-preview {
       position: absolute;
-      top: -10px;
-      right: -10px;
+      top: 4px;
+      right: 4px;
       background: var(--error-color);
       color: white;
       border: none;
@@ -74,7 +98,7 @@ export class MemeUploader extends LitElement {
       align-items: center;
       justify-content: center;
       font-size: 16px;
-      z-index: 1;
+      z-index: 2;
     }
 
     .upload-button {
@@ -100,6 +124,11 @@ export class MemeUploader extends LitElement {
 
     .upload-button:not(:disabled):hover {
       background-color: #4a00b3;
+    }
+
+    .progress {
+      margin-top: 1rem;
+      color: var(--text-color);
     }
 
     .error {
@@ -128,12 +157,6 @@ export class MemeUploader extends LitElement {
       animation: spin 1s linear infinite;
     }
 
-    .upload-icon {
-      width: 20px;
-      height: 20px;
-      fill: currentColor;
-    }
-
     @keyframes spin {
       to {
         transform: rotate(360deg);
@@ -151,40 +174,66 @@ export class MemeUploader extends LitElement {
   private isLoading: boolean = false;
 
   @state()
-  private previewUrl: string | null = null;
+  private progress: string = '';
 
   @state()
   private isDragover: boolean = false;
 
-  private file: File | null = null;
-
-  private supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_KEY || ''
-  );
+  @state()
+  private previews: Array<{ 
+    file: File; 
+    url: string;
+    type: 'image' | 'video';
+  }> = [];
 
   render() {
     return html`
-      <div class="upload-container" @click=${(e: Event) => e.stopPropagation()}>
-        <h2 class="title">Sube tu Meme</h2>
+      <div class="upload-container">
+        <h2 class="title">Sube tus Memes</h2>
         
-        <div 
-          class="drop-zone ${this.isDragover ? 'dragover' : ''}"
+        <div class="drop-zone ${this.isDragover ? 'dragover' : ''}"
           @dragover=${this._handleDragOver}
           @dragleave=${this._handleDragLeave}
           @drop=${this._handleDrop}
           @click=${this._handleZoneClick}
         >
-          ${this.previewUrl 
+          ${this.previews.length > 0 
             ? html`
               <div class="preview-container">
-                <img src="${this.previewUrl}" alt="Preview" class="preview-image">
-                <button class="remove-preview" @click=${this._handleRemovePreview}>×</button>
+                ${this.previews.map((preview, index) => html`
+                  <div class="preview-item">
+                    ${preview.type === 'image' 
+                      ? html`<img 
+                          src="${preview.url}" 
+                          alt="Preview" 
+                          class="preview-image"
+                        >`
+                      : html`<video 
+                          src="${preview.url}" 
+                          class="preview-video"
+                          autoplay
+                          loop
+                          muted
+                          playsinline
+                        ></video>`
+                    }
+                    <span class="file-type-indicator">
+                      ${preview.type === 'image' ? 'IMG' : 'VID'}
+                    </span>
+                    <button 
+                      class="remove-preview" 
+                      @click=${(e: Event) => {
+                        e.stopPropagation();
+                        this._handleRemovePreview(e, index);
+                      }}
+                    >×</button>
+                  </div>
+                `)}
               </div>
             `
             : html`
               <p class="drop-zone-text">
-                Arrastra y suelta tu imagen aquí<br>
+                Arrastra y suelta tus imágenes o videos aquí<br>
                 o haz clic para seleccionar
               </p>
               <svg class="upload-icon" viewBox="0 0 24 24" width="48" height="48">
@@ -196,15 +245,20 @@ export class MemeUploader extends LitElement {
 
         <input 
           type="file" 
-          accept="image/*"
+          accept="image/*,video/*"
           @change=${this._handleFileSelect}
           id="file-input"
+          multiple
+          @click=${(e: Event) => e.stopPropagation()}
         >
 
         <button 
           class="upload-button"
-          ?disabled=${!this.file || this.isLoading}
-          @click=${this._handleUpload}
+          ?disabled=${this.previews.length === 0 || this.isLoading}
+          @click=${(e: Event) => {
+            e.stopPropagation();
+            this._handleUpload();
+          }}
         >
           ${this.isLoading 
             ? html`<span class="loading"></span>` 
@@ -214,9 +268,10 @@ export class MemeUploader extends LitElement {
               </svg>
             `
           }
-          ${this.isLoading ? 'Subiendo...' : 'Subir Meme'}
+          ${this.isLoading ? 'Subiendo...' : 'Subir Memes'}
         </button>
 
+        ${this.progress ? html`<p class="progress">${this.progress}</p>` : ''}
         ${this.error ? html`<p class="error">${this.error}</p>` : ''}
         ${this.success ? html`<p class="success">${this.success}</p>` : ''}
       </div>
@@ -239,7 +294,7 @@ export class MemeUploader extends LitElement {
     
     const files = e.dataTransfer?.files;
     if (files?.length) {
-      this._processFile(files[0]);
+      this._processFiles(Array.from(files));
     }
   }
 
@@ -253,70 +308,93 @@ export class MemeUploader extends LitElement {
   }
 
   private _handleFileSelect(e: Event) {
+    e.stopPropagation();
     const input = e.target as HTMLInputElement;
     const files = input.files;
     
     if (files?.length) {
-      this._processFile(files[0]);
+      this._processFiles(Array.from(files));
     }
   }
 
-  private _processFile(file: File) {
-    if (!file.type.startsWith('image/')) {
-      this.error = 'Por favor, selecciona una imagen válida';
-      return;
-    }
+  private _processFiles(files: File[]) {
+    files.forEach(file => {
+      const isImage = file.type.startsWith('image/');
+      const isVideo = file.type.startsWith('video/');
 
-    this.file = file;
+      if (!isImage && !isVideo) {
+        this.error = 'Por favor, selecciona solo imágenes o videos';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.previews = [
+          ...this.previews,
+          { 
+            file, 
+            url: e.target?.result as string,
+            type: isImage ? 'image' : 'video'
+          }
+        ];
+      };
+      reader.readAsDataURL(file);
+    });
+
     this.error = '';
     this.success = '';
-    
-    // Crear preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      this.previewUrl = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
   }
 
-  private _handleRemovePreview(e: Event) {
+  private _handleRemovePreview(e: Event, index: number) {
     e.stopPropagation();
-    this.previewUrl = null;
-    this.file = null;
+    this.previews = this.previews.filter((_, i) => i !== index);
     this.error = '';
     this.success = '';
-    const input = this.shadowRoot?.querySelector('#file-input') as HTMLInputElement;
-    if (input) input.value = '';
   }
 
   private async _handleUpload() {
-    if (!this.file) return;
+    if (this.previews.length === 0) return;
 
     try {
       this.isLoading = true;
       this.error = '';
-      
-      const { data, error } = await this.supabase.storage
-        .from('memes')
-        .upload(`meme-${Date.now()}-${this.file.name}`, this.file);
+      this.success = '';
 
-      if (error) throw error;
+      let uploadedCount = 0;
+      const totalFiles = this.previews.length;
 
-      this.success = '¡Meme subido exitosamente!';
-      this._handleRemovePreview(new Event('click'));
+      for (const preview of this.previews) {
+        const fileExt = preview.file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+        const { error } = await supabase.storage
+          .from('memes')
+          .upload(fileName, preview.file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (error) throw error;
+
+        uploadedCount++;
+        this.progress = `Subiendo... ${uploadedCount}/${totalFiles}`;
+      }
+
+      this.success = '¡Archivos subidos exitosamente!';
+      this.previews = [];
+      this.progress = '';
       
-      // Notificar que se ha subido un nuevo meme
       this.dispatchEvent(new CustomEvent('meme-uploaded', {
-        detail: { path: data.path },
         bubbles: true,
         composed: true
       }));
 
-    } catch (err) {
-      this.error = 'Error al subir el meme. Por favor, intenta de nuevo.';
+    } catch (err: any) {
       console.error('Error de subida:', err);
+      this.error = 'Error al subir los archivos. Por favor, intenta de nuevo.';
     } finally {
       this.isLoading = false;
+      this.progress = '';
     }
   }
 } 

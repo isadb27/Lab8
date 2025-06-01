@@ -71,7 +71,6 @@ export class NavBar extends LitElement {
   }
 
   private _handleUploadClick() {
-    // Dispatch un evento personalizado que será escuchado por meme-uploader
     this.dispatchEvent(new CustomEvent('show-upload-dialog', {
       bubbles: true,
       composed: true

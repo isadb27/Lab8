@@ -75,7 +75,6 @@ export class MemeApp extends LitElement {
   }
 
   private _handleMemeUploaded() {
-    // Cerrar el diálogo después de una subida exitosa
     this.showUploadDialog = false;
   }
 } 
